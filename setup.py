@@ -3,10 +3,12 @@ import platform
 versions = '1.3.0'
 
 build_exe_options = {
-    "packages": ["comtypes"],
     "include_files": ['resource/'],
     "build_exe": f"EggManager_{versions}"
 }
+
+if platform.system() == "Windows":
+    build_exe_options["packages"] = ["comtypes"]
 
 executable_kwargs = {
     "script": 'EggManager_GUI.py',
