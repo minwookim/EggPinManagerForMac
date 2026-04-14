@@ -25,3 +25,5 @@ requests==2.32.3
 setuptools==75.8.0
 shiboken6==6.8.2.1
 urllib3==2.3.0
+pywinauto==0.6.8; platform_system == "Windows"
+pywin32==310; platform_system == "Windows"

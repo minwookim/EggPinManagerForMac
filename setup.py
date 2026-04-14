@@ -1,4 +1,5 @@
 from cx_Freeze import setup, Executable
+import platform
 versions = '1.2.7'
 
 build_exe_options = {
@@ -6,8 +7,18 @@ build_exe_options = {
     "include_files": ['resource/'],
     "build_exe": f"EggManager_{versions}"
 }
- 
-exe = [Executable(f'EggManager_GUI.py', base='gui', target_name=f'EggManager_{versions}', icon='resource/eggui', uac_admin=True)]
+
+executable_kwargs = {
+    "script": 'EggManager_GUI.py',
+    "target_name": f'EggManager_{versions}',
+    "icon": 'resource/eggui.ico',
+}
+
+if platform.system() == "Windows":
+    executable_kwargs["base"] = "gui"
+    executable_kwargs["uac_admin"] = True
+
+exe = [Executable(**executable_kwargs)]
  
 setup(
     name='EggManager',
