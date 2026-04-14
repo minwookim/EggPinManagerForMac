@@ -1,4 +1,4 @@
-# EggPinManager
+# EggPinManager (fork from [EggPinManager](https://github.com/TUVup/EggPinManager) ) 
 ![image](https://github.com/user-attachments/assets/53bb4e5c-e9af-4c79-9559-60ca31a0dede)
 
 
@@ -7,7 +7,7 @@
 
 **EggManager**는 에그머니의 PIN과 잔액을 손쉽게 관리할 수 있는 Python 기반의 도구입니다. PIN 추가, 삭제, 잔액 갱신, 목록 조회, 총 잔액 확인 등 PIN 관리에 필요한 다양한 기능을 제공합니다. 또한 특정 금액에 맞는 PIN을 자동으로 선택하여 사용할 수 있도록 도와줍니다.
 
-[최신 버전 다운로드](https://github.com/TUVup/EggPinManager/releases/latest)
+[최신 버전 다운로드](https://github.com/minwookim/EggPinManagerForMac/releases/latest)
 
 **※ PIN 자동 사용 전에 결제창의 개발자 도구 콘솔에서 붙여넣기 허용을 먼저 해주세요.**
 - **Windows (Chrome/Edge)**: `Ctrl + Shift + J`
@@ -83,7 +83,7 @@
 - **config.ini**: 설정이 저장된 파일입니다.
 
 ## 설치 및 실행
-1. [최신 버전 다운로드](https://github.com/TUVup/EggPinManager/releases/latest)
+1. [최신 버전 다운로드](https://github.com/minwookim/EggPinManagerForMac/releases/latest)
 2. 압축을 풀고 실행.
 
 ## 빌드 정보
