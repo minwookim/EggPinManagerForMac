@@ -1,4 +1,4 @@
-# EggPinManager (fork from [EggPinManager](https://github.com/TUVup/EggPinManager) ) 
+# EggPinManager With MACOS (fork from [EggPinManager](https://github.com/TUVup/EggPinManager) ) 
 ![image](https://github.com/user-attachments/assets/53bb4e5c-e9af-4c79-9559-60ca31a0dede)
 
 
