@@ -9,7 +9,10 @@
 
 [최신 버전 다운로드](https://github.com/TUVup/EggPinManager/releases/latest)
 
-**※PIN 자동 사용 전에 에그머니 결제창에서 ctrl+shitf+j를 눌러 콘솔창을 띄운뒤 allow pasting(안될시 한글로 붙여넣기 허용 또는 {PH1} 입력)을 입력하고 엔터를 누르면 콘솔창에 붙여넣기가 허용됩니다. 최초에 단 한번만 하면 되고 인게임 자동사용 기능을 사용하고 싶으신 분은 반드시 해주세요.**
+**※ PIN 자동 사용 전에 결제창의 개발자 도구 콘솔에서 붙여넣기 허용을 먼저 해주세요.**
+- **Windows (Chrome/Edge)**: `Ctrl + Shift + J`
+- **macOS (Chrome/Edge)**: `Cmd + Option + J`
+- 콘솔에서 `allow pasting` (또는 `붙여넣기 허용`) 입력 후 Enter
 
 ## 주요 기능
 - **PIN 추가 및 삭제**: 새로운 PIN을 등록하거나 기존 PIN을 삭제할 수 있습니다.
@@ -45,7 +48,11 @@
   1. HAOPLAY 핀 입력창에서 PIN 자동 사용 - HAOPLAY를 클릭하면 자동으로 금액에 맞는 핀을 사용합니다.
   2. 설정 - 결제창 자동 최종 결제를 체크하면 '다음' 버튼까지 눌러 최종 결제 과정까지 자동화합니다. 
   
-   **최초 사용시 ctrl+shitf+j를 눌러 콘솔창을 띄운뒤 allow pasting(또는 붙여넣기 허용)을 입력하고 엔터를 눌러 콘솔창에 붙여넣기를 허용해 주세요.**
+   **최초 사용 시 개발자 도구 콘솔을 열고(`Ctrl+Shift+J` 또는 `Cmd+Option+J`) `allow pasting`(또는 `붙여넣기 허용`)을 입력해 붙여넣기를 허용해 주세요.**
+
+6. 플랫폼 안내:
+   - `브라우저` 자동 사용: Windows / macOS 모두 지원
+   - `HAOPLAY` 자동 사용: Windows 전용 (macOS 미지원)
 
 5. 설정:
    - `프로그램 정보`: 프로그램 정보를 보여줍니다.

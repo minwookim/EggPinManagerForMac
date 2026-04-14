@@ -3,9 +3,11 @@ import sys
 import os
 import re
 import time
+import platform
 import ctypes, pyperclip
 from itertools import combinations
 from datetime import datetime
+from contextlib import contextmanager
 import pyautogui
 import webbrowser
 import requests
@@ -13,11 +15,6 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 import configparser as cp
-import pywinauto
-from pywinauto import Application
-from win32api import GetSystemMetrics
-import win32con
-import win32gui
 import threading
 import urllib.request
 import zipfile
@@ -25,11 +22,27 @@ import shutil
 import subprocess
 import tempfile
 
+IS_WINDOWS = platform.system() == "Windows"
+IS_MACOS = platform.system() == "Darwin"
+
+if IS_WINDOWS:
+    import pywinauto
+    from pywinauto import Application
+    from win32api import GetSystemMetrics
+    import win32con
+    import win32gui
+else:
+    pywinauto = None
+    Application = None
+    GetSystemMetrics = None
+    win32con = None
+    win32gui = None
+
 current_version = "1.3.0"  # 현재 버전
 config = cp.ConfigParser()
 
 # Windows API 함수 로드
-user32 = ctypes.windll.user32
+user32 = ctypes.windll.user32 if IS_WINDOWS else None
 
 def config_read():
     # 기본 설정값 정의
@@ -683,6 +696,33 @@ class PinManagerApp(QMainWindow):
         if config['SETTING']['auto_update'] == 'True':
             # print("자동 업데이트가 활성화되어 있습니다.")
             self.check_for_updates(silent=True)  # 자동 업데이트 확인
+
+    @contextmanager
+    def preserve_clipboard(self):
+        original_clipboard = pyperclip.paste()
+        try:
+            yield
+        finally:
+            pyperclip.copy(original_clipboard)
+
+    def get_mod_key(self):
+        return 'command' if IS_MACOS else 'ctrl'
+
+    def open_devtools_console(self):
+        mod = self.get_mod_key()
+        if IS_MACOS:
+            pyautogui.hotkey(mod, 'alt', 'j')
+        else:
+            pyautogui.hotkey(mod, 'shift', 'j')
+        time.sleep(1)
+        pyautogui.hotkey(mod, '`')
+        time.sleep(0.2)
+
+    def paste_with_shortcut(self):
+        pyautogui.hotkey(self.get_mod_key(), 'v')
+
+    def windows_only_message(self):
+        return "❌ 이 기능은 Windows 환경에서만 지원됩니다. macOS에서는 브라우저 자동 사용을 이용해 주세요."
 
     def initUI(self):
         # UI 초기화 및 설정
@@ -1723,77 +1763,70 @@ class PinManagerApp(QMainWindow):
 
     # 선택된 PIN을 HAOPLAY에서 사용
     def use_selected_pins_auto(self, selected_pins):
+        if not IS_WINDOWS:
+            return self.windows_only_message()
         if config['SETTING']['size_adjust'] == 'True':
             self.adjust_window_size()
             time.sleep(1)  # 창 크기 조절 후 잠시 대기
-        # 현재 클립보드 데이터 저장
-        original_clipboard = pyperclip.paste()
         total_used = 0
         new_log_entry = ""
         pins_used_info = []  # 통계 로그용 정보 수집
         
         try:
-            # 1️⃣ HAOPLAY 창 핸들 찾기
-            app = Application(backend="uia").connect(title_re=".*HAOPLAY.*")
-            haoplay_window = app.window(title_re=".*HAOPLAY.*")
-            if not haoplay_window.exists():
-                return "❌ HAOPLAY 창을 찾을 수 없습니다."
-            webview_control = haoplay_window.child_window(class_name_re="BrowserRootView", control_type="Pane").wrapper_object()
-            if not webview_control:
-                return "❌ 웹뷰 컨트롤을 찾을 수 없습니다."
-            webview_control.set_focus()  # 웹뷰 컨트롤을 활성화
+            with self.preserve_clipboard():
+                # 1️⃣ HAOPLAY 창 핸들 찾기
+                app = Application(backend="uia").connect(title_re=".*HAOPLAY.*")
+                haoplay_window = app.window(title_re=".*HAOPLAY.*")
+                if not haoplay_window.exists():
+                    return "❌ HAOPLAY 창을 찾을 수 없습니다."
+                webview_control = haoplay_window.child_window(class_name_re="BrowserRootView", control_type="Pane").wrapper_object()
+                if not webview_control:
+                    return "❌ 웹뷰 컨트롤을 찾을 수 없습니다."
+                webview_control.set_focus()  # 웹뷰 컨트롤을 활성화
 
-            time.sleep(0.5)  # 안정성을 위해 대기
+                time.sleep(0.5)  # 안정성을 위해 대기
+                self.open_devtools_console()
+
+                # amount = int(self.find_amount())
+                amount = self.find_amount()
+                product_name = self.find_Product()
+                new_log_entry += f'{product_name} - {amount}원\n'
+
+                # 선택된 PIN의 총 잔액 확인
+                total_balance = sum(balance for _, balance in selected_pins)
+                if total_balance < amount:
+                    return f"선택된 PIN의 총 잔액({total_balance}원)이 필요한 금액({amount}원)보다 적습니다."
+
+                # 목록에서 최대 5개의 핀번호 제한
+                pins_to_use = self.manager.find_pins_for_amount(amount, selected_pins)
+                if not pins_to_use:
+                    return "충분한 잔액이 없습니다."
+                if len(pins_to_use) == 0:
+                    return "사용할 수 있는 핀 조합이 없습니다."
             
-            pyautogui.hotkey('ctrl', 'shift', 'j')  # DevTools 열기
-            time.sleep(1)
-            pyautogui.hotkey('ctrl', '`') # Console 탭으로 이동
-            time.sleep(0.2)
+                pins_to_inject = [pin for pin, _ in pins_to_use]
 
-            # amount = int(self.find_amount())
-            amount = self.find_amount()
-            product_name = self.find_Product()
-            new_log_entry += f'{product_name} - {amount}원\n'
+                # 4️⃣ 핀번호를 입력박스에 추가
+                self.add_pin_input_box(len(pins_to_inject))
 
-            # 선택된 PIN의 총 잔액 확인
-            total_balance = sum(balance for _, balance in selected_pins)
-            if total_balance < amount:
-                return f"선택된 PIN의 총 잔액({total_balance}원)이 필요한 금액({amount}원)보다 적습니다."
+                # 5️⃣ 핀번호들 자바스크립트를 통해 입력
+                result = self.inject_pin_codes(pins_to_inject)
+                if not result:
+                    return "❌ PIN 입력에 실패했습니다.\n PIN 입력이 완료되지 않았습니다."
 
-            # 목록에서 최대 5개의 핀번호 제한
-            pins_to_use = self.manager.find_pins_for_amount(amount, selected_pins)
-            if not pins_to_use:
-                return "충분한 잔액이 없습니다."
-            if len(pins_to_use) == 0:
-                return "사용할 수 있는 핀 조합이 없습니다."
-            
-            pins_to_inject = [pin for pin, _ in pins_to_use]
+                # 모두 동의
+                self.click_all_agree()
 
-            # 4️⃣ 핀번호를 입력박스에 추가
-            self.add_pin_input_box(len(pins_to_inject))
+                # 다음 버튼
+                self.submit()
 
-            # 5️⃣ 핀번호들 자바스크립트를 통해 입력
-            result = self.inject_pin_codes(pins_to_inject)
-            if not result:
-                return "❌ PIN 입력에 실패했습니다.\n PIN 입력이 완료되지 않았습니다."
-
-            # 모두 동의
-            self.click_all_agree()
-
-            # 다음 버튼
-            self.submit()
-
-            # 제출
-            if config['SETTING']['auto_submit'] == 'True':
-                time.sleep(1.2)
-                self.final_submit()
+                # 제출
+                if config['SETTING']['auto_submit'] == 'True':
+                    time.sleep(1.2)
+                    self.final_submit()
 
         except Exception as e:
             return f"❌ 자동 입력에 실패했습니다.\n{e}"
-
-        finally:
-            # 클립보드 데이터 원래 값으로 복원
-            pyperclip.copy(original_clipboard)
 
         # 사용한 핀의 잔액을 갱신하고 필요 시 PIN 삭제
         for pin, balance in pins_to_use:
@@ -1821,74 +1854,66 @@ class PinManagerApp(QMainWindow):
 
     # PIN 자동 사용 기능
     def use_pins_auto(self):
+        if not IS_WINDOWS:
+            return self.windows_only_message()
         if config['SETTING']['size_adjust'] == 'True':
             self.adjust_window_size()
             time.sleep(1)  # 창 크기 조절 후 잠시 대기
-        # 현재 클립보드 데이터 저장
-        original_clipboard = pyperclip.paste()
         total_used = 0
         new_log_entry = ""
         pins_used_info = []  # 통계 로그용 정보 수집
         print("🔔 자동 사용 시작")
 
         try:
-            # 1️⃣ HAOPLAY 창 핸들 찾기
-            app = Application(backend="uia").connect(title_re=".*HAOPLAY.*")
-            haoplay_window = app.window(title_re=".*HAOPLAY.*")
-            if not haoplay_window.exists():
-                return "❌ HAOPLAY 창을 찾을 수 없습니다."
-            webview_control = haoplay_window.child_window(class_name_re="BrowserRootView", control_type="Pane").wrapper_object()
-            if not webview_control:
-                return "❌ 웹뷰 컨트롤을 찾을 수 없습니다."
-            webview_control.set_focus()  # 웹뷰 컨트롤을 활성화
+            with self.preserve_clipboard():
+                # 1️⃣ HAOPLAY 창 핸들 찾기
+                app = Application(backend="uia").connect(title_re=".*HAOPLAY.*")
+                haoplay_window = app.window(title_re=".*HAOPLAY.*")
+                if not haoplay_window.exists():
+                    return "❌ HAOPLAY 창을 찾을 수 없습니다."
+                webview_control = haoplay_window.child_window(class_name_re="BrowserRootView", control_type="Pane").wrapper_object()
+                if not webview_control:
+                    return "❌ 웹뷰 컨트롤을 찾을 수 없습니다."
+                webview_control.set_focus()  # 웹뷰 컨트롤을 활성화
 
-            time.sleep(0.5)  # 안정성을 위해 대기
-            
-            pyautogui.hotkey('ctrl', 'shift', 'j')  # DevTools 열기
-            time.sleep(1)
-            pyautogui.hotkey('ctrl', '`') # Console 탭으로 이동
-            time.sleep(0.2)
+                time.sleep(0.5)  # 안정성을 위해 대기
+                self.open_devtools_console()
 
-            # amount = int(self.find_amount())
-            amount = self.find_amount()
-            product_name = self.find_Product()
-            new_log_entry += f'{product_name} - {amount}원\n'
+                # amount = int(self.find_amount())
+                amount = self.find_amount()
+                product_name = self.find_Product()
+                new_log_entry += f'{product_name} - {amount}원\n'
 
-            selected_pins = self.manager.find_pins_for_amount(amount)
-            if not selected_pins:
-                return "충분한 잔액이 없습니다."
-            if len(selected_pins) == 0:
-                return "사용할 수 있는 핀 조합이 없습니다."
+                selected_pins = self.manager.find_pins_for_amount(amount)
+                if not selected_pins:
+                    return "충분한 잔액이 없습니다."
+                if len(selected_pins) == 0:
+                    return "사용할 수 있는 핀 조합이 없습니다."
 
-            # 목록에서 최대 5개의 핀번호를 가져옴
-            pins_to_inject = [selected_pins[i][0] for i in range(min(5, len(selected_pins)))]
+                # 목록에서 최대 5개의 핀번호를 가져옴
+                pins_to_inject = [selected_pins[i][0] for i in range(min(5, len(selected_pins)))]
 
-            # 4️⃣ 핀번호를 입력박스에 추가
-            self.add_pin_input_box(len(pins_to_inject))
+                # 4️⃣ 핀번호를 입력박스에 추가
+                self.add_pin_input_box(len(pins_to_inject))
 
-            # 5️⃣ 핀번호들 자바스크립트를 통해 입력
-            result = self.inject_pin_codes(pins_to_inject)
-            if not result:
-                return "❌ PIN 입력에 실패했습니다.\n PIN 입력이 완료되지 않았습니다."
+                # 5️⃣ 핀번호들 자바스크립트를 통해 입력
+                result = self.inject_pin_codes(pins_to_inject)
+                if not result:
+                    return "❌ PIN 입력에 실패했습니다.\n PIN 입력이 완료되지 않았습니다."
 
-            # 모두 동의
-            self.click_all_agree()
+                # 모두 동의
+                self.click_all_agree()
 
-            # 다음 버튼
-            self.submit()
+                # 다음 버튼
+                self.submit()
 
-            # 제출
-            if config['SETTING']['auto_submit'] == 'True':
-                time.sleep(1.2)  # 제출 후 잠시 대기
-                self.final_submit()
+                # 제출
+                if config['SETTING']['auto_submit'] == 'True':
+                    time.sleep(1.2)  # 제출 후 잠시 대기
+                    self.final_submit()
 
         except Exception as e:
             return f"❌ 자동 입력에 실패했습니다.\n{e}"
-
-        finally:
-            # 클립보드 데이터 원래 값으로 복원
-            pyperclip.copy(original_clipboard)
-            # print("✅ 클립보드 복원 완료.")
 
         # 사용한 핀의 잔액을 갱신하고 사용한 핀을 삭제
         for pin, balance in selected_pins:
@@ -1976,6 +2001,8 @@ class PinManagerApp(QMainWindow):
             return False
         
     def webview_rise(self):
+        if not IS_WINDOWS or user32 is None or Application is None:
+            return self.windows_only_message()
        # 1️⃣ HAOPLAY 창 핸들 찾기
         haoplay_hwnd = user32.FindWindowW(None, "HAOPLAY")
         if haoplay_hwnd:
@@ -2077,8 +2104,7 @@ class PinManagerApp(QMainWindow):
                                                 0, 0, 1000000, 1000)
                 if ok:
                     self.webview_rise()
-                    pyautogui.hotkey('ctrl', 'shift', 'j')
-                    time.sleep(0.2)
+                    self.open_devtools_console()
                     return amount
                 else:
                     raise ValueError("금액 입력이 취소되었습니다.")
@@ -2100,14 +2126,12 @@ class PinManagerApp(QMainWindow):
                         "정확한 금액을 입력해주세요:", 0, 0, 1000000, 1000)
                     if ok:
                         self.webview_rise()
-                        pyautogui.hotkey('ctrl', 'shift', 'j')
-                        time.sleep(0.2)
+                        self.open_devtools_console()
                         return amount
                     else:
                         raise ValueError("금액 입력이 취소되었습니다.")
                 self.webview_rise()
-                pyautogui.hotkey('ctrl', 'shift', 'j')
-                time.sleep(0.2)
+                self.open_devtools_console()
             
             # 최종 금액 리턴
             return int(digits_only)
@@ -2126,8 +2150,7 @@ class PinManagerApp(QMainWindow):
                 "사용할 금액:", 0, 0, 1000000, 1000)
             if ok:
                 self.webview_rise()
-                pyautogui.hotkey('ctrl', 'shift', 'j')
-                time.sleep(0.2)
+                self.open_devtools_console()
                 return amount
             else:
                 raise ValueError("금액 입력이 취소되었습니다.")
@@ -2254,7 +2277,7 @@ class PinManagerApp(QMainWindow):
 
             # 핀 입력용 배열 생성
             arr = [item for pin in pins for item in pin.split("-")]
-            arr_text = f"['{"', '".join(arr)}']"
+            arr_text = "['" + "', '".join(arr) + "']"
             
             # 자바스크립트 코드 준비 (오류 처리 포함)
             javascript_code = '''
@@ -2319,13 +2342,13 @@ class PinManagerApp(QMainWindow):
         # 6️⃣ 클립보드에 자바스크립트 코드 복사 (pyperclip 사용)
         pyperclip.copy(javascript_code)
         # print(f"✅ 자바스크립트 코드 클립보드에 복사 완료.\n{pyperclip.paste()}")
-
-        pyautogui.hotkey('ctrl', 'v')
-        time.sleep(0.2)
-
-        # 8️⃣ Enter 키 입력 (자바스크립트 실행)
-        pyautogui.press('enter')
-        time.sleep(0.1)
+        for _ in range(3):
+            self.paste_with_shortcut()
+            time.sleep(0.2)
+            pyautogui.press('enter')
+            time.sleep(0.1)
+            if pyperclip.paste() != javascript_code:
+                break
 
         # print("✅ 자바스크립트 실행 완료.")
 
@@ -2355,6 +2378,9 @@ class PinManagerApp(QMainWindow):
         Returns:
             bool: 창 크기 조절 성공 여부
         """
+        if not IS_WINDOWS or win32gui is None or win32con is None or GetSystemMetrics is None:
+            self.show_warning_with_copy("안내", "창 크기 자동 조절은 Windows에서만 지원됩니다.")
+            return False
         try:
             # 작업 표시줄 정보 가져오기
             taskbar_hwnd = win32gui.FindWindow("Shell_TrayWnd", None)
