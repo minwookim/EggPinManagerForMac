@@ -53,6 +53,18 @@
 6. 플랫폼 안내:
    - `브라우저` 자동 사용: Windows / macOS 모두 지원
    - `HAOPLAY` 자동 사용: Windows 전용 (macOS 미지원)
+   - `자동 업데이트 설치`: 현재 Windows 중심 동작 (macOS는 수동 업데이트 권장)
+
+
+7. macOS 사용 시 Windows와 다른 점
+   - `개발자도구 열기`: `Cmd + Option + J` (Windows는 `Ctrl + Shift + J`)
+   - `붙여넣기 단축키`: `Cmd + V` (Windows는 `Ctrl + V`)
+   - `브라우저 자동 사용`: 지원
+   - `HAOPLAY 자동 사용`: 미지원 (Windows 전용 자동화 API 사용)
+   - `창 크기 자동 조절`: 미지원 (Windows Win32 API 기반)
+   - `자동 업데이트 설치`: 미지원에 가까움 (현재 `.bat`/`.exe` 중심 로직이므로 macOS는 릴리즈 페이지에서 수동 업데이트 권장)
+
+   > macOS에서는 PIN 관리(추가/삭제/잔액 갱신/목록/총합)와 브라우저 자동 입력을 기본 사용 경로로 권장합니다.
 
 5. 설정:
    - `프로그램 정보`: 프로그램 정보를 보여줍니다.
