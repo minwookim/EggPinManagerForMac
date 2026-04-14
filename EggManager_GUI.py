@@ -712,11 +712,12 @@ class PinManagerApp(QMainWindow):
         mod = self.get_mod_key()
         if IS_MACOS:
             pyautogui.hotkey(mod, 'alt', 'j')
+            time.sleep(1)
         else:
             pyautogui.hotkey(mod, 'shift', 'j')
-        time.sleep(1)
-        pyautogui.hotkey(mod, '`')
-        time.sleep(0.2)
+            time.sleep(1)
+            pyautogui.hotkey(mod, '`')
+            time.sleep(0.2)
 
     def paste_with_shortcut(self):
         pyautogui.hotkey(self.get_mod_key(), 'v')
