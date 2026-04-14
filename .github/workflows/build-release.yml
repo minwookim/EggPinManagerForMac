@@ -1,0 +1,133 @@
+name: Build Release Artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: EggManager-win
+            zip_name: EggManager-win.zip
+            make_legacy_zip: true
+          - os: macos-latest
+            artifact_name: EggManager-mac
+            zip_name: EggManager-mac.zip
+            make_legacy_zip: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+
+      - name: Detect build output directory from setup.py
+        id: detect_build_dir
+        shell: bash
+        run: |
+          BUILD_DIR=$(python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          code = Path('setup.py').read_text(encoding='utf-8')
+          tree = ast.parse(code)
+          version = None
+
+          for node in tree.body:
+              if isinstance(node, ast.Assign):
+                  for target in node.targets:
+                      if isinstance(target, ast.Name) and target.id == 'versions':
+                          if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                              version = node.value.value
+
+          if not version:
+              raise SystemExit('Could not detect `versions` from setup.py')
+
+          print(f'EggManager_{version}')
+          PY
+          )
+          echo "build_dir=${BUILD_DIR}" >> "$GITHUB_OUTPUT"
+          echo "Detected build directory: ${BUILD_DIR}"
+
+      - name: Build executable
+        run: python setup.py build_exe
+
+      - name: Verify build output
+        shell: bash
+        run: |
+          test -d "${{ steps.detect_build_dir.outputs.build_dir }}"
+          echo "Build directory exists: ${{ steps.detect_build_dir.outputs.build_dir }}"
+
+      - name: Archive build output
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          import os
+
+          build_dir = Path(os.environ['BUILD_DIR'])
+          zip_name = Path(os.environ['ZIP_NAME'])
+
+          with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zf:
+              for path in build_dir.rglob('*'):
+                  zf.write(path, path.relative_to(build_dir))
+
+          print(f'Created: {zip_name}')
+          PY
+        env:
+          BUILD_DIR: ${{ steps.detect_build_dir.outputs.build_dir }}
+          ZIP_NAME: ${{ matrix.zip_name }}
+
+      - name: Prepare legacy updater zip (Windows only)
+        if: matrix.make_legacy_zip
+        shell: bash
+        run: cp "${{ matrix.zip_name }}" EggManager.zip
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.zip_name }}
+          if-no-files-found: error
+
+      - name: Upload legacy updater artifact (Windows only)
+        if: matrix.make_legacy_zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: EggManager-legacy-updater
+          path: EggManager.zip
+          if-no-files-found: error
+
+      - name: Upload asset to release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.zip_name }}
+          fail_on_unmatched_files: false
+
+      - name: Upload legacy updater asset (Windows only)
+        if: matrix.make_legacy_zip && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'release')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: EggManager.zip
+          fail_on_unmatched_files: false
